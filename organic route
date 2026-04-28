@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Organic Routes — AQA A-Level Chemistry</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;height:100vh;display:flex;flex-direction:column;overflow:hidden;background:#fff;color:#1a1a1a;}
+  @media(prefers-color-scheme:dark){body{background:#1a1a1e;color:#e0e0e0;}
+    .hdr{border-color:#333!important;} .panel{border-color:#333!important;background:#1e1e22!important;}
+    .rcard{background:#26262b!important;border-color:#3a3a3f!important;} .rcard:hover{border-color:#555!important;}
+    .rinfo{border-color:#3a3a3f!important;} .node-rect-default{fill:#1e1e22;} .edge-dim{stroke:#444;}
+    .legend-dot{border-color:currentColor!important;} .sec-lbl{color:#888!important;} .empty-txt{color:#666!important;}
+    .reagent-txt{color:#ccc!important;} .info-txt{color:#999!important;} .panel-title{color:#aaa!important;}
+  }
+  .hdr{padding:10px 16px 8px;border-bottom:1px solid #e5e5e5;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+  .hdr-title{font-size:14px;font-weight:600;color:inherit;}
+  .legend{display:flex;gap:10px;}
+  .legend-item{display:flex;align-items:center;gap:4px;font-size:11px;opacity:0.7;}
+  .legend-dot{width:9px;height:9px;border-radius:2px;border:1px solid;}
+  .main{flex:1;display:flex;overflow:hidden;}
+  #svgbox{flex:1;overflow:hidden;cursor:default;}
+  .panel{width:220px;border-left:1px solid #e5e5e5;overflow-y:auto;padding:10px;flex-shrink:0;background:#fafafa;}
+  .panel-title{font-size:10px;color:#999;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:5px;}
+  .sec-lbl{font-size:10px;color:#999;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:5px;}
+  .empty-txt{font-size:12px;color:#aaa;line-height:1.7;padding-top:6px;}
+  .rcard{background:#f5f5f5;border:1px solid #e5e5e5;border-radius:8px;padding:7px 9px;margin-bottom:5px;cursor:pointer;transition:border-color 0.15s;}
+  .rcard:hover{border-color:#ccc;}
+  .reagent-txt{font-size:12px;color:#333;line-height:1.4;}
+  .rinfo{display:none;font-size:11px;color:#666;line-height:1.5;margin-top:5px;padding-top:5px;border-top:1px solid #e8e8e8;}
+  .node-rect-default{fill:#fff;}
+  .edge-dim{stroke:#ddd;}
+  svg text{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <span class="hdr-title">Organic routes</span>
+  <div class="legend" id="legend"></div>
+</div>
+<div class="main">
+  <div id="svgbox"></div>
+  <div class="panel" id="panel"></div>
+</div>
+<script>
+const NW=120,NH=30,VW=570,VH=522;
+const CAT_COLOR={hydrocarbon:'#888780',halo:'#7F77DD',oxy:'#D85A30',nitro:'#1D9E75'};
+const CAT_BG={hydrocarbon:'rgba(136,135,128,0.13)',halo:'rgba(127,119,221,0.13)',oxy:'rgba(216,90,48,0.13)',nitro:'rgba(29,158,117,0.13)'};
+const CAT_LABELS={hydrocarbon:'Hydrocarbons',halo:'Halogenated',oxy:'Oxygenated',nitro:'N-containing'};
+const NODES={
+  alkanes:         {label:'Alkanes',         x:20, y:60, cat:'hydrocarbon'},
+  alkenes:         {label:'Alkenes',          x:275,y:60, cat:'hydrocarbon'},
+  halogenoalkanes: {label:'Halogenoalkanes', x:20, y:195,cat:'halo'},
+  alcohols:        {label:'Alcohols',         x:275,y:195,cat:'oxy'},
+  nitriles:        {label:'Nitriles',         x:435,y:130,cat:'nitro'},
+  aldehydes:       {label:'Aldehydes',        x:100,y:335,cat:'oxy'},
+  ketones:         {label:'Ketones',          x:300,y:335,cat:'oxy'},
+  amines:          {label:'Amines',           x:440,y:290,cat:'nitro'},
+  carboxylic_acids:{label:'Carboxylic Acids', x:170,y:462,cat:'oxy'},
+  acyl_chlorides:  {label:'Acyl Chlorides',   x:330,y:462,cat:'oxy'},
+  esters:          {label:'Esters',           x:20, y:462,cat:'oxy'},
+  amides:          {label:'Amides',           x:445,y:432,cat:'nitro'},
+};
+const EDGES=[
+  {id:'e1', from:'alkanes',to:'halogenoalkanes',label:'X\u2082, UV',offset:0,
+   reagents:'X\u2082, UV light',info:'Free radical substitution. Cl\u2082 or Br\u2082 with UV light. Chain reaction: initiation \u2192 propagation \u2192 termination.'},
+  {id:'e2', from:'alkenes',to:'alkanes',label:'H\u2082/Ni',offset:15,
+   reagents:'H\u2082, Ni catalyst, 150\u00b0C',info:'Hydrogenation \u2014 H\u2082 adds across the double bond. Heterogeneous catalysis used in margarine production.'},
+  {id:'e3', from:'alkanes',to:'alkenes',label:'cracking',offset:15,
+   reagents:'Catalytic or thermal cracking',info:'Industrial process. Long-chain alkanes \u2192 shorter alkanes + alkenes. Not a lab synthesis route.'},
+  {id:'e4', from:'alkenes',to:'halogenoalkanes',label:'HX',offset:25,
+   reagents:'HX (HBr, HCl, or HI)',info:'Electrophilic addition. For unsymmetrical alkenes, Markovnikov\u2019s rule: H adds to the carbon with more H already attached.'},
+  {id:'e5', from:'alkenes',to:'alcohols',label:'H\u2082O / H\u207a',offset:-18,
+   reagents:'Steam + H\u2083PO\u2084 catalyst (300\u00b0C, 60 atm)',info:'Acid-catalysed hydration. Electrophilic addition of water across the double bond.'},
+  {id:'e6', from:'alcohols',to:'alkenes',label:'H\u2082SO\u2084/H\u2083PO\u2084, \u0394',offset:-18,
+   reagents:'Conc H\u2082SO\u2084 or H\u2083PO\u2084, heat (~170\u00b0C)',info:'Dehydration/elimination. KOH in ethanol also works. Zaitsev\u2019s rule: more substituted alkene preferred.'},
+  {id:'e7', from:'halogenoalkanes',to:'alcohols',label:'NaOH(aq)',offset:-18,
+   reagents:'NaOH(aq), reflux',info:'Nucleophilic substitution (hydrolysis). OH\u207b displaces the halide. 1\u00b0 \u2192 SN2; 3\u00b0 \u2192 SN1.'},
+  {id:'e8', from:'alcohols',to:'halogenoalkanes',label:'PCl\u2085 / HBr',offset:-18,
+   reagents:'PCl\u2085 (room temp) or HBr + H\u2082SO\u2084 (reflux)',info:'PCl\u2085: OH \u2192 Cl, HCl fumes produced. HBr/H\u2082SO\u2084: OH \u2192 Br. SOCl\u2082 is an alternative for Cl.'},
+  {id:'e9', from:'halogenoalkanes',to:'alkenes',label:'KOH/EtOH, \u0394',offset:0,
+   reagents:'KOH in ethanol, heat',info:'Elimination. KOH/ethanol \u2192 elimination; NaOH/aq \u2192 substitution. The solvent controls the outcome.'},
+  {id:'e10',from:'halogenoalkanes',to:'nitriles',label:'KCN/EtOH',offset:0,
+   reagents:'KCN in ethanol, reflux',info:'Nucleophilic substitution. CN\u207b displaces halide. Chain length increases by 1 carbon \u2014 key synthetic step.'},
+  {id:'e11',from:'halogenoalkanes',to:'amines',label:'xs NH\u2083/EtOH',offset:30,
+   reagents:'Excess NH\u2083 in ethanol, heat (sealed tube)',info:'Nucleophilic substitution. Excess NH\u2083 suppresses further alkylation to secondary/tertiary amines.'},
+  {id:'e12',from:'alcohols',to:'aldehydes',label:'K\u2082Cr\u2082O\u2087/H\u207a, distil',offset:-18,
+   reagents:'Acidified K\u2082Cr\u2082O\u2087 (or KMnO\u2084), distillation',info:'Oxidation of primary alcohol. Distil immediately \u2014 the aldehyde has a lower bp, so it escapes before being oxidised further to carboxylic acid.'},
+  {id:'e13',from:'aldehydes',to:'alcohols',label:'NaBH\u2084',offset:-18,
+   reagents:'NaBH\u2084 in water (or LiAlH\u2084)',info:'Reduction. NaBH\u2084 delivers H\u207b to the carbonyl carbon. LiAlH\u2084 is more powerful but needs dry ether.'},
+  {id:'e14',from:'alcohols',to:'ketones',label:'K\u2082Cr\u2082O\u2087/H\u207a, reflux',offset:-18,
+   reagents:'Acidified K\u2082Cr\u2082O\u2087, reflux',info:'Oxidation of secondary alcohol. Reflux not distil. Ketones resist further oxidation \u2014 no H on the carbonyl carbon.'},
+  {id:'e15',from:'ketones',to:'alcohols',label:'NaBH\u2084',offset:-18,
+   reagents:'NaBH\u2084 in water (or LiAlH\u2084)',info:'Reduction to secondary alcohol. Same reagents as for aldehyde reduction.'},
+  {id:'e16',from:'alcohols',to:'carboxylic_acids',label:'xs K\u2082Cr\u2082O\u2087/H\u207a, reflux',offset:-20,
+   reagents:'Excess acidified K\u2082Cr\u2082O\u2087, reflux',info:'Two-step oxidation: primary alcohol \u2192 aldehyde \u2192 carboxylic acid. Excess oxidant and reflux drive both steps.'},
+  {id:'e17',from:'aldehydes',to:'carboxylic_acids',label:'K\u2082Cr\u2082O\u2087/H\u207a',offset:0,
+   reagents:'Acidified K\u2082Cr\u2082O\u2087, reflux',info:'Oxidation. Aldehydes oxidise readily (unlike ketones). Tollens\u2019 and Fehling\u2019s tests also oxidise aldehydes.'},
+  {id:'e18',from:'nitriles',to:'amines',label:'H\u2082/Ni',offset:0,
+   reagents:'H\u2082, Ni catalyst',info:'Reduction of nitrile to primary amine. Product is one carbon longer than the original halogenoalkane.'},
+  {id:'e19',from:'nitriles',to:'carboxylic_acids',label:'H\u2083O\u207a, reflux',offset:20,
+   reagents:'Dilute H\u2082SO\u2084 (or NaOH(aq) then acidify), reflux',info:'Hydrolysis. Acid \u2192 carboxylic acid; base \u2192 carboxylate salt (then acidify). Chain is +1C vs original halogenoalkane.'},
+  {id:'e20',from:'carboxylic_acids',to:'esters',label:'ROH, H\u207a',offset:-12,
+   reagents:'Alcohol + conc H\u2082SO\u2084 catalyst, reflux',info:'Fischer esterification. Reversible \u2014 use excess alcohol or remove water to push yield right.'},
+  {id:'e21',from:'esters',to:'carboxylic_acids',label:'H\u2082O, H\u207a/OH\u207b',offset:-12,
+   reagents:'H\u2082O + acid or alkali, reflux',info:'Hydrolysis. Acid hydrolysis is reversible (acid + alcohol). Base hydrolysis (saponification) is irreversible (carboxylate salt + alcohol).'},
+  {id:'e22',from:'carboxylic_acids',to:'acyl_chlorides',label:'PCl\u2085 or SOCl\u2082',offset:0,
+   reagents:'PCl\u2085 (room temp) or SOCl\u2082',info:'SOCl\u2082 preferred: gaseous byproducts (SO\u2082 + HCl) are easy to remove, giving pure product. PCl\u2085 gives liquid POCl\u2083.'},
+  {id:'e23',from:'acyl_chlorides',to:'esters',label:'ROH',offset:80,
+   reagents:'Alcohol, room temperature (no catalyst needed)',info:'Nucleophilic acyl substitution. Faster than Fischer esterification. HCl produced as byproduct.'},
+  {id:'e24',from:'acyl_chlorides',to:'amides',label:'NH\u2083 or RNH\u2082',offset:0,
+   reagents:'NH\u2083 (\u2192 amide) or RNH\u2082 (\u2192 N-substituted amide)',info:'Nucleophilic acyl substitution at room temperature. HCl fumes produced. Excess amine neutralises HCl.'},
+  {id:'e25',from:'amines',to:'amides',label:'acyl Cl / RCOOH',offset:15,
+   reagents:'Acyl chloride (fast, room temp) or carboxylic acid (heat)',info:'Condensation forming the amide (peptide) bond \u2014 the same bond found in proteins.'},
+  {id:'e26',from:'amides',to:'amines',label:'LiAlH\u2084',offset:15,
+   reagents:'LiAlH\u2084 in dry ether',info:'Reduction of amide to amine. LiAlH\u2084 required \u2014 NaBH\u2084 is not strong enough to reduce amides.'},
+];
+
+function nc(k){var n=NODES[k];return[n.x+NW/2,n.y+NH/2];}
+function trimR(cx,cy,dx,dy){var hw=NW/2+4,hh=NH/2+4;var tx=Math.abs(dx)>0?hw/Math.abs(dx):1e9;var ty=Math.abs(dy)>0?hh/Math.abs(dy):1e9;var t=Math.min(tx,ty);return[cx+dx*t,cy+dy*t];}
+function ep(fk,tk,off){
+var f=nc(fk),t=nc(tk),fx=f[0],fy=f[1],tx=t[0],ty=t[1];
+var dx=tx-fx,dy=ty-fy,len=Math.sqrt(dx*dx+dy*dy);
+if(!off){var s=trimR(fx,fy,dx/len,dy/len),e=trimR(tx,ty,-dx/len,-dy/len);return{d:‘M’+s[0]+’ ‘+s[1]+‘L’+e[0]+’ ‘+e[1],lx:(s[0]+e[0])/2,ly:(s[1]+e[1])/2};}
+var mx=(fx+tx)/2,my=(fy+ty)/2,nx=-dy/len,ny=dx/len;
+var cpx=mx+nx*off,cpy=my+ny*off;
+var dsx=cpx-fx,dsy=cpy-fy,dsl=Math.sqrt(dsx*dsx+dsy*dsy);
+var s=trimR(fx,fy,dsx/dsl,dsy/dsl);
+var dex=tx-cpx,dey=ty-cpy,del=Math.sqrt(dex*dex+dey*dey);
+var e=trimR(tx,ty,-dex/del,-dey/del);
+return{d:‘M’+s[0]+’ ‘+s[1]+‘Q’+cpx+’ ‘+cpy+’ ‘+e[0]+’ ’+e[1],lx:.25*s[0]+.5*cpx+.25*e[0],ly:.25*s[1]+.5*cpy+.25*e[1]};
+}
+
+var sel=null;
+
+function buildLegend(){
+var html=’’;
+for(var cat in CAT_LABELS){
+html+=’<div class="legend-item"><div class="legend-dot" style="background:'+CAT_BG[cat]+';border-color:'+CAT_COLOR[cat]+'"></div>’+CAT_LABELS[cat]+’</div>’;
+}
+document.getElementById(‘legend’).innerHTML=html;
+}
+
+function render(){
+var hlE=null,hlN=null,pOut=[],pIn=[];
+if(sel){
+hlE={};hlN={};
+EDGES.forEach(function(e){if(e.from===sel||e.to===sel){hlE[e.id]=1;hlN[e.from]=1;hlN[e.to]=1;}});
+pOut=EDGES.filter(function(e){return e.from===sel;});
+pIn=EDGES.filter(function(e){return e.to===sel;});
+}
+
+var isDark=window.matchMedia&&window.matchMedia(’(prefers-color-scheme:dark)’).matches;
+var defFill=isDark?’#1e1e22’:’#fff’;
+var dimStroke=isDark?’#444’:’#ddd’;
+
+var mkrs=’’;
+for(var cat in CAT_COLOR){
+mkrs+=’<marker id="m'+cat+'" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="'+CAT_COLOR[cat]+'" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>’;
+}
+mkrs+=’<marker id="mdim" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="'+dimStroke+'" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>’;
+
+var edgesHtml=’’;
+EDGES.forEach(function(e){
+var hl=!sel||(hlE&&hlE[e.id]);
+var p=ep(e.from,e.to,e.offset||0);
+var fcat=NODES[e.from].cat;
+var color=hl?CAT_COLOR[fcat]:dimStroke;
+var sw=hl&&sel?1.8:0.8;
+var mk=hl&&sel?‘m’+fcat:‘mdim’;
+var lbl=hl&&sel?’<text x="'+p.lx+'" y="'+(p.ly-5)+'" text-anchor="middle" font-size="9" fill="'+color+'">’+e.label+’</text>’:’’;
+edgesHtml+=’<g opacity="'+(hl?1:0.22)+'"><path d="'+p.d+'" fill="none" stroke="'+color+'" stroke-width="'+sw+'" marker-end="url(#'+mk+')"/>’+lbl+’</g>’;
+});
+
+var nodesHtml=’’;
+var keys=Object.keys(NODES);
+keys.forEach(function(key){
+var n=NODES[key];
+var isSel=key===sel;
+var isConn=hlN&&hlN[key];
+var isDim=sel&&!isSel&&!isConn;
+var color=CAT_COLOR[n.cat];
+var bg=isSel?CAT_BG[n.cat]:defFill;
+var sw=isSel?1.5:0.5;
+nodesHtml+=’<g data-id="'+key+'" style="cursor:pointer" opacity="'+(isDim?0.15:1)+'"><rect x="'+n.x+'" y="'+n.y+'" width="'+NW+'" height="'+NH+'" rx="6" fill="'+bg+'" stroke="'+color+'" stroke-width="'+sw+'"/><text x="'+(n.x+NW/2)+'" y="'+(n.y+NH/2)+'" text-anchor="middle" dominant-baseline="central" font-size="10" font-weight="'+(isSel?600:400)+'" fill="'+color+'">’+n.label+’</text></g>’;
+});
+
+document.getElementById(‘svgbox’).innerHTML=’<svg viewBox="0 0 '+VW+' '+VH+'" style="width:100%;height:100%;display:block"><defs>’+mkrs+’</defs>’+edgesHtml+nodesHtml+’</svg>’;
+
+var panelHtml=’’;
+if(!sel){
+panelHtml=’<p class="empty-txt">Click any compound to see reactions and reagents.</p>’;
+} else {
+var n=NODES[sel];
+panelHtml=’<div style="font-size:13px;font-weight:600;color:'+CAT_COLOR[n.cat]+';margin-bottom:10px">’+n.label+’</div>’;
+if(pOut.length){
+panelHtml+=’<div class="sec-lbl">From this \u2192</div>’;
+pOut.forEach(function(e){panelHtml+=makeCard(e,‘to’);});
+}
+if(pIn.length){
+panelHtml+=’<div class="sec-lbl" style="margin-top:8px">\u2190 To this</div>’;
+pIn.forEach(function(e){panelHtml+=makeCard(e,‘from’);});
+}
+}
+document.getElementById(‘panel’).innerHTML=panelHtml;
+
+document.querySelectorAll(’[data-id]’).forEach(function(el){
+el.addEventListener(‘click’,function(ev){ev.stopPropagation();var k=el.dataset.id;sel=k===sel?null:k;render();});
+});
+document.querySelectorAll(’.rcard’).forEach(function(el){
+el.addEventListener(‘click’,function(){
+var info=el.querySelector(’.rinfo’);
+if(info) info.style.display=info.style.display===‘block’?‘none’:‘block’;
+});
+});
+}
+
+function makeCard(e,dir){
+var oKey=dir===‘to’?e.to:e.from;
+var oNode=NODES[oKey];
+var color=CAT_COLOR[oNode.cat];
+var arrow=dir===‘to’?’\u2192 ‘+oNode.label:’\u2190 ‘+oNode.label;
+return ‘<div class="rcard"><div style="font-size:10px;color:'+color+';margin-bottom:2px">’+arrow+’</div><div class="reagent-txt">’+e.reagents+’</div><div class="rinfo">’+e.info+’</div></div>’;
+}
+
+buildLegend();
+document.getElementById(‘svgbox’).addEventListener(‘click’,function(){sel=null;render();});
+render();
+
+window.matchMedia(’(prefers-color-scheme:dark)’).addEventListener(‘change’,function(){render();});
+</script>
+
+</body>
+</html>
