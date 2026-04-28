@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -14,15 +13,21 @@
     .rinfo{border-color:#3a3a3f!important;} .node-rect-default{fill:#1e1e22;} .edge-dim{stroke:#444;}
     .legend-dot{border-color:currentColor!important;} .sec-lbl{color:#888!important;} .empty-txt{color:#666!important;}
     .reagent-txt{color:#ccc!important;} .info-txt{color:#999!important;} .panel-title{color:#aaa!important;}
+    .tab{border-color:#333!important;color:#888!important;} .tab.active{color:#e0e0e0!important;border-color:#666!important;background:#26262b!important;}
   }
   .hdr{padding:10px 16px 8px;border-bottom:1px solid #e5e5e5;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
   .hdr-title{font-size:14px;font-weight:600;color:inherit;}
-  .legend{display:flex;gap:10px;}
+  .legend{display:flex;gap:10px;flex-wrap:wrap;}
   .legend-item{display:flex;align-items:center;gap:4px;font-size:11px;opacity:0.7;}
   .legend-dot{width:9px;height:9px;border-radius:2px;border:1px solid;}
+  .tabs{display:flex;gap:0;padding:0 16px;border-bottom:1px solid #e5e5e5;flex-shrink:0;}
+  .tab{padding:7px 14px;font-size:12px;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;color:#666;transition:all 0.15s;user-select:none;}
+  .tab:hover{color:#333;}
+  .tab.active{color:#1a1a1a;border-color:#1a1a1a;background:rgba(0,0,0,0.02);}
+  @media(prefers-color-scheme:dark){.tab:hover{color:#ccc;}}
   .main{flex:1;display:flex;overflow:hidden;}
   #svgbox{flex:1;overflow:hidden;cursor:default;}
-  .panel{width:220px;border-left:1px solid #e5e5e5;overflow-y:auto;padding:10px;flex-shrink:0;background:#fafafa;}
+  .panel{width:230px;border-left:1px solid #e5e5e5;overflow-y:auto;padding:10px;flex-shrink:0;background:#fafafa;}
   .panel-title{font-size:10px;color:#999;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:5px;}
   .sec-lbl{font-size:10px;color:#999;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:5px;}
   .empty-txt{font-size:12px;color:#aaa;line-height:1.7;padding-top:6px;}
@@ -40,16 +45,23 @@
   <span class="hdr-title">Organic routes</span>
   <div class="legend" id="legend"></div>
 </div>
+<div class="tabs" id="tabs">
+  <div class="tab active" data-tab="aliphatic">Aliphatic</div>
+  <div class="tab" data-tab="aromatic">Aromatic</div>
+</div>
 <div class="main">
   <div id="svgbox"></div>
   <div class="panel" id="panel"></div>
 </div>
 <script>
-const NW=120,NH=30,VW=570,VH=522;
-const CAT_COLOR={hydrocarbon:'#888780',halo:'#7F77DD',oxy:'#D85A30',nitro:'#1D9E75'};
-const CAT_BG={hydrocarbon:'rgba(136,135,128,0.13)',halo:'rgba(127,119,221,0.13)',oxy:'rgba(216,90,48,0.13)',nitro:'rgba(29,158,117,0.13)'};
-const CAT_LABELS={hydrocarbon:'Hydrocarbons',halo:'Halogenated',oxy:'Oxygenated',nitro:'N-containing'};
-const NODES={
+const NW=120,NH=30;
+const CAT_COLOR={hydrocarbon:'#888780',halo:'#7F77DD',oxy:'#D85A30',nitro:'#1D9E75',aromatic:'#C45BA0'};
+const CAT_BG={hydrocarbon:'rgba(136,135,128,0.13)',halo:'rgba(127,119,221,0.13)',oxy:'rgba(216,90,48,0.13)',nitro:'rgba(29,158,117,0.13)',aromatic:'rgba(196,91,160,0.13)'};
+const CAT_LABELS={hydrocarbon:'Hydrocarbons',halo:'Halogenated',oxy:'Oxygenated',nitro:'N-containing',aromatic:'Aromatic'};
+
+/* ──── ALIPHATIC ──── */
+const ALI_VW=570,ALI_VH=522;
+const ALI_NODES={
   alkanes:         {label:'Alkanes',         x:20, y:60, cat:'hydrocarbon'},
   alkenes:         {label:'Alkenes',          x:275,y:60, cat:'hydrocarbon'},
   halogenoalkanes: {label:'Halogenoalkanes', x:20, y:195,cat:'halo'},
@@ -63,7 +75,7 @@ const NODES={
   esters:          {label:'Esters',           x:20, y:462,cat:'oxy'},
   amides:          {label:'Amides',           x:445,y:432,cat:'nitro'},
 };
-const EDGES=[
+const ALI_EDGES=[
   {id:'e1', from:'alkanes',to:'halogenoalkanes',label:'X\u2082, UV',offset:0,
    reagents:'X\u2082, UV light',info:'Free radical substitution. Cl\u2082 or Br\u2082 with UV light. Chain reaction: initiation \u2192 propagation \u2192 termination.'},
   {id:'e2', from:'alkenes',to:'alkanes',label:'H\u2082/Ni',offset:15,
@@ -118,119 +130,176 @@ const EDGES=[
    reagents:'LiAlH\u2084 in dry ether',info:'Reduction of amide to amine. LiAlH\u2084 required \u2014 NaBH\u2084 is not strong enough to reduce amides.'},
 ];
 
-function nc(k){var n=NODES[k];return[n.x+NW/2,n.y+NH/2];}
-function trimR(cx,cy,dx,dy){var hw=NW/2+4,hh=NH/2+4;var tx=Math.abs(dx)>0?hw/Math.abs(dx):1e9;var ty=Math.abs(dy)>0?hh/Math.abs(dy):1e9;var t=Math.min(tx,ty);return[cx+dx*t,cy+dy*t];}
-function ep(fk,tk,off){
-var f=nc(fk),t=nc(tk),fx=f[0],fy=f[1],tx=t[0],ty=t[1];
-var dx=tx-fx,dy=ty-fy,len=Math.sqrt(dx*dx+dy*dy);
-if(!off){var s=trimR(fx,fy,dx/len,dy/len),e=trimR(tx,ty,-dx/len,-dy/len);return{d:‘M’+s[0]+’ ‘+s[1]+‘L’+e[0]+’ ‘+e[1],lx:(s[0]+e[0])/2,ly:(s[1]+e[1])/2};}
-var mx=(fx+tx)/2,my=(fy+ty)/2,nx=-dy/len,ny=dx/len;
-var cpx=mx+nx*off,cpy=my+ny*off;
-var dsx=cpx-fx,dsy=cpy-fy,dsl=Math.sqrt(dsx*dsx+dsy*dsy);
-var s=trimR(fx,fy,dsx/dsl,dsy/dsl);
-var dex=tx-cpx,dey=ty-cpy,del=Math.sqrt(dex*dex+dey*dey);
-var e=trimR(tx,ty,-dex/del,-dey/del);
-return{d:‘M’+s[0]+’ ‘+s[1]+‘Q’+cpx+’ ‘+cpy+’ ‘+e[0]+’ ’+e[1],lx:.25*s[0]+.5*cpx+.25*e[0],ly:.25*s[1]+.5*cpy+.25*e[1]};
-}
+/* ──── AROMATIC ──── */
+const ARO_VW=600,ARO_VH=520;
+const ARO_NODES={
+  benzene:        {label:'Benzene',           x:240,y:30,  cat:'aromatic'},
+  nitrobenzene:   {label:'Nitrobenzene',      x:240,y:140, cat:'nitro'},
+  phenylamine:    {label:'Phenylamine',       x:240,y:260, cat:'nitro'},
+  phenyldiazonium:{label:'Diazonium Salt',    x:240,y:380, cat:'nitro'},
+  azo_dye:        {label:'Azo Dye',           x:430,y:380, cat:'aromatic'},
+  phenol:         {label:'Phenol',            x:30, y:380, cat:'oxy'},
+  bromobenzene:   {label:'Bromobenzene',      x:460,y:80,  cat:'halo'},
+  methylbenzene:  {label:'Methylbenzene',     x:20, y:30,  cat:'hydrocarbon'},
+  benzoic_acid:   {label:'Benzoic Acid',      x:20, y:160, cat:'oxy'},
+  tribromophenol: {label:'2,4,6-tribromophenol',x:20,y:480,cat:'halo'},
+};
+const ARO_EDGES=[
+  {id:'a1',from:'benzene',to:'nitrobenzene',label:'HNO\u2083/H\u2082SO\u2084',offset:0,
+   reagents:'Conc HNO\u2083 + conc H\u2082SO\u2084, 50\u00b0C',info:'Electrophilic aromatic substitution. The electrophile is NO\u2082\u207a (nitronium ion), generated from the acid mixture. Temperature kept below 55\u00b0C to prevent dinitration.'},
+  {id:'a2',from:'nitrobenzene',to:'phenylamine',label:'Sn/HCl, then NaOH',offset:0,
+   reagents:'Tin + conc HCl, reflux; then NaOH(aq)',info:'Reduction. Sn/HCl reduces \u2013NO\u2082 to \u2013NH\u2082. The product initially forms as phenylammonium salt; NaOH deprotonates it to free phenylamine.'},
+  {id:'a3',from:'phenylamine',to:'phenyldiazonium',label:'NaNO\u2082/HCl, <10\u00b0C',offset:0,
+   reagents:'NaNO\u2082 + dilute HCl, below 10\u00b0C',info:'Diazotisation. HNO\u2082 (formed in situ from NaNO\u2082 + HCl) reacts with phenylamine to form the diazonium salt. Temperature must stay below 10\u00b0C or the diazonium decomposes to phenol + N\u2082.'},
+  {id:'a4',from:'phenyldiazonium',to:'azo_dye',label:'PhOH or PhNH\u2082',offset:0,
+   reagents:'Coupling with phenol (in NaOH) or phenylamine',info:'Azo coupling. The diazonium ion acts as an electrophile, attacking the activated ring (phenol or amine). Forms an \u2013N=N\u2013 bridge \u2192 coloured azo compound.'},
+  {id:'a5',from:'benzene',to:'bromobenzene',label:'Br\u2082/AlBr\u2083',offset:0,
+   reagents:'Br\u2082 + AlBr\u2083 (or FeBr\u2083) catalyst',info:'Electrophilic aromatic substitution (halogenation). AlBr\u2083 polarises Br\u2082 to generate Br\u207a electrophile. HBr produced. Compare: alkenes react with Br\u2082 alone (no catalyst).'},
+  {id:'a6',from:'benzene',to:'methylbenzene',label:'CH\u2083Cl/AlCl\u2083',offset:15,
+   reagents:'CH\u2083Cl + AlCl\u2083 catalyst',info:'Friedel\u2013Crafts alkylation. AlCl\u2083 generates the CH\u2083\u207a electrophile. Limited by multiple alkylation \u2014 product is more reactive than benzene.'},
+  {id:'a7',from:'methylbenzene',to:'benzoic_acid',label:'KMnO\u2084/H\u207a, reflux',offset:0,
+   reagents:'Alkaline KMnO\u2084, reflux; then acidify',info:'Side-chain oxidation. The \u2013CH\u2083 group is oxidised to \u2013COOH regardless of chain length. Only works if there is a C\u2013H bond on the carbon attached to the ring.'},
+  {id:'a8',from:'phenyldiazonium',to:'phenol',label:'H\u2082O, warm',offset:25,
+   reagents:'Warm the aqueous diazonium solution',info:'Hydrolysis. Warming above 10\u00b0C decomposes the diazonium salt: C\u2086H\u2085N\u2082\u207aCl\u207b + H\u2082O \u2192 phenol + N\u2082 + HCl. This is why diazotisation must be kept cold.'},
+  {id:'a9',from:'phenol',to:'tribromophenol',label:'Br\u2082(aq)',offset:0,
+   reagents:'Bromine water (no catalyst needed)',info:'Electrophilic aromatic substitution. The \u2013OH group activates the ring so strongly that bromine water alone gives 2,4,6-tribromophenol (white precipitate) \u2014 no halogen carrier needed. Compare with benzene which needs AlBr\u2083.'},
+  {id:'a10',from:'phenylamine',to:'phenol',label:'(via diazonium)',offset:-40,
+   reagents:'NaNO\u2082/HCl <10\u00b0C then warm',info:'Two-step route: diazotise at <10\u00b0C, then warm to hydrolyse the diazonium salt to phenol. The diazonium intermediate is not isolated.'},
+  {id:'a11',from:'benzene',to:'phenol',label:'(industrial)',offset:-50,
+   reagents:'Cumene process (industrial)',info:'Industrial route only \u2014 not a lab synthesis. Benzene \u2192 cumene (isopropylbenzene) \u2192 cumene hydroperoxide \u2192 phenol + propanone. Not assessed as a mechanism at A-level.'},
+];
 
+/* ──── STATE ──── */
+var currentTab='aliphatic';
 var sel=null;
 
-function buildLegend(){
-var html=’’;
-for(var cat in CAT_LABELS){
-html+=’<div class="legend-item"><div class="legend-dot" style="background:'+CAT_BG[cat]+';border-color:'+CAT_COLOR[cat]+'"></div>’+CAT_LABELS[cat]+’</div>’;
+function getGraph(){
+  if(currentTab==='aliphatic') return {nodes:ALI_NODES,edges:ALI_EDGES,vw:ALI_VW,vh:ALI_VH};
+  return {nodes:ARO_NODES,edges:ARO_EDGES,vw:ARO_VW,vh:ARO_VH};
 }
-document.getElementById(‘legend’).innerHTML=html;
+
+function nc(nodes,k){var n=nodes[k];return[n.x+NW/2,n.y+NH/2];}
+function trimR(cx,cy,dx,dy){var hw=NW/2+4,hh=NH/2+4;var tx=Math.abs(dx)>0?hw/Math.abs(dx):1e9;var ty=Math.abs(dy)>0?hh/Math.abs(dy):1e9;var t=Math.min(tx,ty);return[cx+dx*t,cy+dy*t];}
+function ep(nodes,fk,tk,off){
+  var f=nc(nodes,fk),t=nc(nodes,tk),fx=f[0],fy=f[1],tx=t[0],ty=t[1];
+  var dx=tx-fx,dy=ty-fy,len=Math.sqrt(dx*dx+dy*dy);
+  if(!off){var s=trimR(fx,fy,dx/len,dy/len),e=trimR(tx,ty,-dx/len,-dy/len);return{d:'M'+s[0]+' '+s[1]+'L'+e[0]+' '+e[1],lx:(s[0]+e[0])/2,ly:(s[1]+e[1])/2};}
+  var mx=(fx+tx)/2,my=(fy+ty)/2,nx=-dy/len,ny=dx/len;
+  var cpx=mx+nx*off,cpy=my+ny*off;
+  var dsx=cpx-fx,dsy=cpy-fy,dsl=Math.sqrt(dsx*dsx+dsy*dsy);
+  var s=trimR(fx,fy,dsx/dsl,dsy/dsl);
+  var dex=tx-cpx,dey=ty-cpy,del=Math.sqrt(dex*dex+dey*dey);
+  var e=trimR(tx,ty,-dex/del,-dey/del);
+  return{d:'M'+s[0]+' '+s[1]+'Q'+cpx+' '+cpy+' '+e[0]+' '+e[1],lx:.25*s[0]+.5*cpx+.25*e[0],ly:.25*s[1]+.5*cpy+.25*e[1]};
+}
+
+function buildLegend(){
+  var html='';
+  for(var cat in CAT_LABELS){
+    html+='<div class="legend-item"><div class="legend-dot" style="background:'+CAT_BG[cat]+';border-color:'+CAT_COLOR[cat]+'"></div>'+CAT_LABELS[cat]+'</div>';
+  }
+  document.getElementById('legend').innerHTML=html;
 }
 
 function render(){
-var hlE=null,hlN=null,pOut=[],pIn=[];
-if(sel){
-hlE={};hlN={};
-EDGES.forEach(function(e){if(e.from===sel||e.to===sel){hlE[e.id]=1;hlN[e.from]=1;hlN[e.to]=1;}});
-pOut=EDGES.filter(function(e){return e.from===sel;});
-pIn=EDGES.filter(function(e){return e.to===sel;});
+  var g=getGraph(),NODES=g.nodes,EDGES=g.edges,VW=g.vw,VH=g.vh;
+  var hlE=null,hlN=null,pOut=[],pIn=[];
+  if(sel&&NODES[sel]){
+    hlE={};hlN={};
+    EDGES.forEach(function(e){if(e.from===sel||e.to===sel){hlE[e.id]=1;hlN[e.from]=1;hlN[e.to]=1;}});
+    pOut=EDGES.filter(function(e){return e.from===sel;});
+    pIn=EDGES.filter(function(e){return e.to===sel;});
+  } else { sel=null; }
+
+  var isDark=window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches;
+  var defFill=isDark?'#1e1e22':'#fff';
+  var dimStroke=isDark?'#444':'#ddd';
+
+  var mkrs='';
+  for(var cat in CAT_COLOR){
+    mkrs+='<marker id="m'+cat+'" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="'+CAT_COLOR[cat]+'" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>';
+  }
+  mkrs+='<marker id="mdim" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="'+dimStroke+'" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>';
+
+  var edgesHtml='';
+  EDGES.forEach(function(e){
+    var hl=!sel||(hlE&&hlE[e.id]);
+    var p=ep(NODES,e.from,e.to,e.offset||0);
+    var fcat=NODES[e.from].cat;
+    var color=hl?CAT_COLOR[fcat]:dimStroke;
+    var sw=hl&&sel?1.8:0.8;
+    var mk=hl&&sel?'m'+fcat:'mdim';
+    var lbl=hl&&sel?'<text x="'+p.lx+'" y="'+(p.ly-5)+'" text-anchor="middle" font-size="9" fill="'+color+'">'+e.label+'</text>':'';
+    edgesHtml+='<g opacity="'+(hl?1:0.22)+'"><path d="'+p.d+'" fill="none" stroke="'+color+'" stroke-width="'+sw+'" marker-end="url(#'+mk+')"/>'+lbl+'</g>';
+  });
+
+  var nodesHtml='';
+  var keys=Object.keys(NODES);
+  keys.forEach(function(key){
+    var n=NODES[key];
+    var isSel=key===sel;
+    var isConn=hlN&&hlN[key];
+    var isDim=sel&&!isSel&&!isConn;
+    var color=CAT_COLOR[n.cat];
+    var bg=isSel?CAT_BG[n.cat]:defFill;
+    var sw=isSel?1.5:0.5;
+    nodesHtml+='<g data-id="'+key+'" style="cursor:pointer" opacity="'+(isDim?0.15:1)+'"><rect x="'+n.x+'" y="'+n.y+'" width="'+NW+'" height="'+NH+'" rx="6" fill="'+bg+'" stroke="'+color+'" stroke-width="'+sw+'"/><text x="'+(n.x+NW/2)+'" y="'+(n.y+NH/2)+'" text-anchor="middle" dominant-baseline="central" font-size="10" font-weight="'+(isSel?600:400)+'" fill="'+color+'">'+n.label+'</text></g>';
+  });
+
+  document.getElementById('svgbox').innerHTML='<svg viewBox="0 0 '+VW+' '+VH+'" style="width:100%;height:100%;display:block"><defs>'+mkrs+'</defs>'+edgesHtml+nodesHtml+'</svg>';
+
+  var panelHtml='';
+  if(!sel){
+    panelHtml='<p class="empty-txt">Click any compound to see reactions and reagents.</p>';
+  } else {
+    var n=NODES[sel];
+    panelHtml='<div style="font-size:13px;font-weight:600;color:'+CAT_COLOR[n.cat]+';margin-bottom:10px">'+n.label+'</div>';
+    if(pOut.length){
+      panelHtml+='<div class="sec-lbl">From this \u2192</div>';
+      pOut.forEach(function(e){panelHtml+=makeCard(NODES,e,'to');});
+    }
+    if(pIn.length){
+      panelHtml+='<div class="sec-lbl" style="margin-top:8px">\u2190 To this</div>';
+      pIn.forEach(function(e){panelHtml+=makeCard(NODES,e,'from');});
+    }
+  }
+  document.getElementById('panel').innerHTML=panelHtml;
+
+  document.querySelectorAll('[data-id]').forEach(function(el){
+    el.addEventListener('click',function(ev){ev.stopPropagation();var k=el.dataset.id;sel=k===sel?null:k;render();});
+  });
+  document.querySelectorAll('.rcard').forEach(function(el){
+    el.addEventListener('click',function(){
+      var info=el.querySelector('.rinfo');
+      if(info) info.style.display=info.style.display==='block'?'none':'block';
+    });
+  });
 }
 
-var isDark=window.matchMedia&&window.matchMedia(’(prefers-color-scheme:dark)’).matches;
-var defFill=isDark?’#1e1e22’:’#fff’;
-var dimStroke=isDark?’#444’:’#ddd’;
-
-var mkrs=’’;
-for(var cat in CAT_COLOR){
-mkrs+=’<marker id="m'+cat+'" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="'+CAT_COLOR[cat]+'" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>’;
+function makeCard(NODES,e,dir){
+  var oKey=dir==='to'?e.to:e.from;
+  var oNode=NODES[oKey];
+  var color=CAT_COLOR[oNode.cat];
+  var arrow=dir==='to'?'\u2192 '+oNode.label:'\u2190 '+oNode.label;
+  return '<div class="rcard"><div style="font-size:10px;color:'+color+';margin-bottom:2px">'+arrow+'</div><div class="reagent-txt">'+e.reagents+'</div><div class="rinfo">'+e.info+'</div></div>';
 }
-mkrs+=’<marker id="mdim" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="'+dimStroke+'" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>’;
 
-var edgesHtml=’’;
-EDGES.forEach(function(e){
-var hl=!sel||(hlE&&hlE[e.id]);
-var p=ep(e.from,e.to,e.offset||0);
-var fcat=NODES[e.from].cat;
-var color=hl?CAT_COLOR[fcat]:dimStroke;
-var sw=hl&&sel?1.8:0.8;
-var mk=hl&&sel?‘m’+fcat:‘mdim’;
-var lbl=hl&&sel?’<text x="'+p.lx+'" y="'+(p.ly-5)+'" text-anchor="middle" font-size="9" fill="'+color+'">’+e.label+’</text>’:’’;
-edgesHtml+=’<g opacity="'+(hl?1:0.22)+'"><path d="'+p.d+'" fill="none" stroke="'+color+'" stroke-width="'+sw+'" marker-end="url(#'+mk+')"/>’+lbl+’</g>’;
+/* ──── TABS ──── */
+document.querySelectorAll('.tab').forEach(function(tab){
+  tab.addEventListener('click',function(){
+    document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active');});
+    tab.classList.add('active');
+    currentTab=tab.dataset.tab;
+    sel=null;
+    render();
+  });
 });
-
-var nodesHtml=’’;
-var keys=Object.keys(NODES);
-keys.forEach(function(key){
-var n=NODES[key];
-var isSel=key===sel;
-var isConn=hlN&&hlN[key];
-var isDim=sel&&!isSel&&!isConn;
-var color=CAT_COLOR[n.cat];
-var bg=isSel?CAT_BG[n.cat]:defFill;
-var sw=isSel?1.5:0.5;
-nodesHtml+=’<g data-id="'+key+'" style="cursor:pointer" opacity="'+(isDim?0.15:1)+'"><rect x="'+n.x+'" y="'+n.y+'" width="'+NW+'" height="'+NH+'" rx="6" fill="'+bg+'" stroke="'+color+'" stroke-width="'+sw+'"/><text x="'+(n.x+NW/2)+'" y="'+(n.y+NH/2)+'" text-anchor="middle" dominant-baseline="central" font-size="10" font-weight="'+(isSel?600:400)+'" fill="'+color+'">’+n.label+’</text></g>’;
-});
-
-document.getElementById(‘svgbox’).innerHTML=’<svg viewBox="0 0 '+VW+' '+VH+'" style="width:100%;height:100%;display:block"><defs>’+mkrs+’</defs>’+edgesHtml+nodesHtml+’</svg>’;
-
-var panelHtml=’’;
-if(!sel){
-panelHtml=’<p class="empty-txt">Click any compound to see reactions and reagents.</p>’;
-} else {
-var n=NODES[sel];
-panelHtml=’<div style="font-size:13px;font-weight:600;color:'+CAT_COLOR[n.cat]+';margin-bottom:10px">’+n.label+’</div>’;
-if(pOut.length){
-panelHtml+=’<div class="sec-lbl">From this \u2192</div>’;
-pOut.forEach(function(e){panelHtml+=makeCard(e,‘to’);});
-}
-if(pIn.length){
-panelHtml+=’<div class="sec-lbl" style="margin-top:8px">\u2190 To this</div>’;
-pIn.forEach(function(e){panelHtml+=makeCard(e,‘from’);});
-}
-}
-document.getElementById(‘panel’).innerHTML=panelHtml;
-
-document.querySelectorAll(’[data-id]’).forEach(function(el){
-el.addEventListener(‘click’,function(ev){ev.stopPropagation();var k=el.dataset.id;sel=k===sel?null:k;render();});
-});
-document.querySelectorAll(’.rcard’).forEach(function(el){
-el.addEventListener(‘click’,function(){
-var info=el.querySelector(’.rinfo’);
-if(info) info.style.display=info.style.display===‘block’?‘none’:‘block’;
-});
-});
-}
-
-function makeCard(e,dir){
-var oKey=dir===‘to’?e.to:e.from;
-var oNode=NODES[oKey];
-var color=CAT_COLOR[oNode.cat];
-var arrow=dir===‘to’?’\u2192 ‘+oNode.label:’\u2190 ‘+oNode.label;
-return ‘<div class="rcard"><div style="font-size:10px;color:'+color+';margin-bottom:2px">’+arrow+’</div><div class="reagent-txt">’+e.reagents+’</div><div class="rinfo">’+e.info+’</div></div>’;
-}
 
 buildLegend();
-document.getElementById(‘svgbox’).addEventListener(‘click’,function(){sel=null;render();});
+document.getElementById('svgbox').addEventListener('click',function(){sel=null;render();});
 render();
 
-window.matchMedia(’(prefers-color-scheme:dark)’).addEventListener(‘change’,function(){render();});
+window.matchMedia('(prefers-color-scheme:dark)').addEventListener('change',function(){render();});
 </script>
-
 </body>
 </html>
